@@ -1,0 +1,5 @@
+outs:
+- md5: 3d6b4ceea433b78243e90f5a6574d842
+  size: 38340560
+  hash: md5
+  path: cleaned_retail.csv
