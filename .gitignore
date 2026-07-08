@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+echo "models/*.pkl" >> .gitignore
+echo ".DS_Store" >> .gitignore
+
 # Python
 __pycache__/
 *.pyc
