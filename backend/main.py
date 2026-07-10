@@ -1,18 +1,30 @@
+import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import joblib
 
-# Create FastAPI app
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR.parent / "models" / "xgb_churn_model.pkl"
+DATA_PATH = BASE_DIR.parent / "models" / "final_decision_matrix.csv"
+
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:3000").split(",")
+
 app = FastAPI(title="Customer Segmentation API")
 
-# Allow React frontend to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+try:
+    model = joblib.load(MODEL_PATH)
+    df = pd.read_csv(DATA_PATH)
+except FileNotFoundError as e:
+    raise RuntimeError(f"Required model/data file missing: {e}") from e
 
 # Load trained model and decision matrix
 model = joblib.load("../models/xgb_churn_model.pkl")
