@@ -43,8 +43,20 @@ try:
 except FileNotFoundError as e:
     raise RuntimeError(f"Required BG/NBD or Gamma-Gamma model missing: {e}") from e
 
-# Features the XGBoost model was actually trained on (see notebook cell 40)
-FEATURE_COLUMNS = ["Frequency", "Monetary", "predicted_ltv"]
+LTV_MEDIAN = df["predicted_ltv"].median()
+
+def recommend_action(churn_probability: float, predicted_ltv: float) -> str:
+    high_risk = churn_probability > 0.5
+    high_ltv = predicted_ltv > LTV_MEDIAN
+
+    if high_risk and high_ltv:
+        return "🔴 Retain Immediately"
+    elif high_risk and not high_ltv:
+        return "⚪ Let Go"
+    elif not high_risk and high_ltv:
+        return "🟢 Nurture"
+    else:
+        return "🔵 Monitor"
 
 
 class CustomerInput(BaseModel):
@@ -94,7 +106,8 @@ def get_customer(customer_id: float):
     row = df[df["Customer ID"] == customer_id]
     if row.empty:
         return {"error": "Customer not found"}
-
+    #Features the XGBoost model was actually trained on (see notebook cell 40)
+    FEATURE_COLUMNS = ["Frequency", "Monetary", "predicted_ltv"]
     features = row[FEATURE_COLUMNS]
     live_churn_prob = float(model.predict_proba(features)[0][1])
 
@@ -153,5 +166,6 @@ def predict_customer(input: CustomerInput):
         "frequency": frequency_rfm,
         "monetary": monetary_rfm,
         "predicted_ltv": round(predicted_ltv, 2),
-        "churn_probability": churn_prob
+        "churn_probability": churn_prob,
+        "action": recommend_action(churn_prob, predicted_ltv)
     }
