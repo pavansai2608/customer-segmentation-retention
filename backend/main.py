@@ -110,6 +110,17 @@ def predict_customer(input: CustomerInput):
     last = datetime.strptime(input.last_purchase_date, "%Y-%m-%d")
     today = datetime.now()
 
+    # ── NEW: validate date logic before doing any math ──
+    if last < first:
+        return {"error": "last_purchase_date cannot be before first_purchase_date"}
+    if last > today:
+        return {"error": "last_purchase_date cannot be in the future"}
+    if input.total_orders <= 0:
+        return {"error": "total_orders must be greater than 0"}
+    if input.total_spent < 0:
+        return {"error": "total_spent cannot be negative"}
+    # ── end new validation ──
+
     frequency_rfm = input.total_orders
     monetary_rfm = input.total_spent
 
