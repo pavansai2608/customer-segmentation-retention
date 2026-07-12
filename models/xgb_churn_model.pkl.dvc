@@ -1,0 +1,5 @@
+outs:
+- md5: 239ecec110ab47c1515bd18db99ac87d
+  size: 153181
+  hash: md5
+  path: xgb_churn_model.pkl

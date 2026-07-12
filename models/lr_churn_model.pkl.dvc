@@ -1,0 +1,5 @@
+outs:
+- md5: 4a0886739c0d36910ca6fe3fa34eb3cb
+  size: 1247
+  hash: md5
+  path: lr_churn_model.pkl
