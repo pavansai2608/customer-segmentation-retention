@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Cartes
 import axios from "axios";
 import "./App.css";
 
-const API = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";;
+const API = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 const SEGMENT_COLORS = {
   "Champions": "#4C9EEB",
@@ -81,6 +81,139 @@ function ChartTooltip({ active, payload, label }) {
       <p className="chart-tooltip-label">{label}</p>
       <p className="chart-tooltip-value">{payload[0].value.toLocaleString()}</p>
     </div>
+  );
+}
+
+// ── New: prediction form for a brand-new customer ──
+function PredictPanel() {
+  const [form, setForm] = useState({
+    first_purchase_date: "",
+    last_purchase_date: "",
+    total_orders: "",
+    total_spent: ""
+  });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateField = (field) => (e) => {
+    setForm({ ...form, [field]: e.target.value });
+  };
+
+  const isValid =
+    form.first_purchase_date &&
+    form.last_purchase_date &&
+    Number(form.total_orders) > 0 &&
+    Number(form.total_spent) >= 0;
+
+  const submitPrediction = async () => {
+    if (!isValid) {
+      setError("Please fill in all fields with valid values.");
+      return;
+    }
+    setError("");
+    setResult(null);
+    setSubmitting(true);
+    try {
+      const r = await axios.post(`${API}/predict`, {
+        first_purchase_date: form.first_purchase_date,
+        last_purchase_date: form.last_purchase_date,
+        total_orders: Number(form.total_orders),
+        total_spent: Number(form.total_spent)
+      });
+      if (r.data.error) setError(r.data.error);
+      else setResult(r.data);
+    } catch {
+      setError("Something went wrong running the prediction. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="panel lookup-panel">
+      <h2>Predict a new customer</h2>
+      <p className="panel-caption">
+        Enter basic purchase history to run live churn &amp; lifetime value inference
+      </p>
+
+      <div className="predict-form">
+        <label className="predict-field">
+          <span className="predict-field-label">First purchase date</span>
+          <input
+            type="date"
+            value={form.first_purchase_date}
+            onChange={updateField("first_purchase_date")}
+          />
+        </label>
+
+        <label className="predict-field">
+          <span className="predict-field-label">Last purchase date</span>
+          <input
+            type="date"
+            value={form.last_purchase_date}
+            onChange={updateField("last_purchase_date")}
+          />
+        </label>
+
+        <label className="predict-field">
+          <span className="predict-field-label">Total orders</span>
+          <input
+            type="number"
+            min="1"
+            placeholder="e.g. 8"
+            value={form.total_orders}
+            onChange={updateField("total_orders")}
+          />
+        </label>
+
+        <label className="predict-field">
+          <span className="predict-field-label">Total spent (£)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 4200"
+            value={form.total_spent}
+            onChange={updateField("total_spent")}
+          />
+        </label>
+      </div>
+
+      <button
+        className="predict-submit"
+        onClick={submitPrediction}
+        disabled={submitting}
+      >
+        {submitting ? "Running inference…" : "Predict churn risk"}
+      </button>
+
+      {error && <p className="error-text">{error}</p>}
+
+      {result && (
+        <div className="customer-result">
+          <RiskGauge value={(result.churn_probability || 0) * 100} />
+          <div className="customer-details">
+            <div className="customer-detail-row">
+              <span className="detail-label">Frequency</span>
+              <span className="detail-value mono">{result.frequency}</span>
+            </div>
+            <div className="customer-detail-row">
+              <span className="detail-label">Monetary</span>
+              <span className="detail-value mono">{formatGBP(result.monetary)}</span>
+            </div>
+            <div className="customer-detail-row">
+              <span className="detail-label">Predicted LTV</span>
+              <span className="detail-value mono">{formatGBP(result.predicted_ltv)}</span>
+            </div>
+            <div className="customer-detail-row">
+              <span className="detail-label">Recommended action</span>
+              <ActionBadge action={result.action} />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -250,6 +383,9 @@ function App() {
               </div>
             )}
           </section>
+
+          {/* ── New section ── */}
+          <PredictPanel />
 
           <section className="panel">
             <h2>Top customers to retain immediately</h2>
