@@ -14,19 +14,19 @@ const SEGMENT_COLORS = {
 };
 
 const ACTION_COLORS = {
-  "🔴 Retain Immediately": "#F5AFAF",
-  "🟢 Nurture": "#A8E0B8",
-  "⚪ Let Go": "#B7B2CC",
-  "🔵 Monitor": "#B6A6E8",
-  "default": "#8FD9D0"
+  retain: "#F5AFAF",
+  nurture: "#A8E0B8",
+  let_go: "#B7B2CC",
+  monitor: "#B6A6E8",
+  default: "#8FD9D0"
 };
 
 function segmentColor(segment) {
   return SEGMENT_COLORS[segment] || SEGMENT_COLORS.default;
 }
 
-function actionColor(action) {
-  return ACTION_COLORS[action] || ACTION_COLORS.default;
+function actionColor(code) {
+  return ACTION_COLORS[code] || ACTION_COLORS.default;
 }
 
 function riskTierColor(pct) {
@@ -84,11 +84,11 @@ function SegmentBadge({ segment }) {
   );
 }
 
-function ActionBadge({ action }) {
-  const color = actionColor(action);
+function ActionBadge({ code, label }) {
+  const color = actionColor(code);
   return (
     <span className="pill" style={{ color, borderColor: color + "55", backgroundColor: color + "1A" }}>
-      {action}
+      {label}
     </span>
   );
 }
@@ -323,7 +323,7 @@ function App() {
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-3)" }} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                     {actions.map((a, i) => (
-                      <Cell key={i} fill={actionColor(a.action)} />
+                      <Cell key={i} fill={actionColor(a.action_code || a.code)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -368,7 +368,7 @@ function App() {
                   </div>
                   <div className="result-row">
                     <span className="result-label">Recommended action</span>
-                    <ActionBadge action={customer.action} />
+                    <ActionBadge code={customer.action_code} label={customer.action || customer.action_label} />
                   </div>
                 </div>
               </div>
@@ -444,7 +444,7 @@ function App() {
                   </div>
                   <div className="result-row">
                     <span className="result-label">Recommended action</span>
-                    <ActionBadge action={predictResult.action} />
+                    <ActionBadge code={predictResult.action_code} label={predictResult.action_label || predictResult.action} />
                   </div>
                 </div>
               </div>
@@ -484,7 +484,7 @@ function App() {
                           </div>
                         </td>
                         <td className="mono">{formatGBP(c.predicted_ltv)}</td>
-                        <td><ActionBadge action={c.action} /></td>
+                        <td><ActionBadge code={c.action_code} label={c.action} /></td>
                       </tr>
                     );
                   })}

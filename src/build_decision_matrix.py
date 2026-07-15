@@ -32,7 +32,8 @@ from lifetimes.utils import summary_data_from_transaction_data
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, roc_auc_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
@@ -45,18 +46,6 @@ JUNK_STOCK_CODES = [
     "POST", "DOT", "M", "m", "D", "C2", "S", "BANK CHARGES",
     "AMAZONFEE", "CRUK", "PADS",
 ]
-
-# Cluster index -> business label, from the K-Means fit in the original notebook.
-# NOTE: cluster indices are not stable across re-runs with different data.
-# If you retrain and the resulting cluster_summary averages look different from
-# what these labels describe, update this mapping to match (see the printed
-# cluster_summary output when you run this script).
-CLUSTER_LABELS = {
-    2: "Champions",        # recent, very frequent, highest spend
-    3: "Loyal Customers",  # recent, frequent, high spend
-    0: "At Risk",          # moderate recency, low frequency
-    1: "Hibernating",      # bought long ago, rarely, low spend
-}
 
 FEATURE_COLUMNS = ["Frequency", "Monetary", "predicted_ltv"]
 
@@ -118,10 +107,20 @@ def fit_segments(rfm: pd.DataFrame) -> pd.DataFrame:
     rfm["Cluster"] = km_final.fit_predict(rfm_scaled)
 
     cluster_summary = rfm.groupby("Cluster")[["Recency", "Frequency", "Monetary"]].mean()
-    print("\nCluster averages (check these against CLUSTER_LABELS mapping):")
+    print("\nCluster averages:")
     print(cluster_summary.round(2))
 
-    rfm["Segment"] = rfm["Cluster"].map(CLUSTER_LABELS)
+    rank_score = (
+        cluster_summary["Frequency"].rank()
+        + cluster_summary["Monetary"].rank()
+        - cluster_summary["Recency"].rank()
+    )
+    ordered_clusters = rank_score.sort_values(ascending=False).index.tolist()
+    labels_in_order = ["Champions", "Loyal Customers", "At Risk", "Hibernating"]
+    cluster_labels = dict(zip(ordered_clusters, labels_in_order))
+
+    rfm["Segment"] = rfm["Cluster"].map(cluster_labels)
+    rfm["Segment"] = rfm["Segment"].fillna("Unclassified")
     print("\nSegment distribution:")
     print(rfm["Segment"].value_counts())
 
@@ -188,12 +187,22 @@ def train_models(rfm_ltv: pd.DataFrame):
     smote = SMOTE(random_state=42)
     X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
 
-    lr_model = LogisticRegression(random_state=42, max_iter=1000)
+    lr_model = make_pipeline(StandardScaler(), LogisticRegression(random_state=42, max_iter=1000))
     lr_model.fit(X_train_balanced, y_train_balanced)
     lr_proba = lr_model.predict_proba(X_test)[:, 1]
     print("\n=== Logistic Regression ===")
     print(classification_report(y_test, lr_model.predict(X_test)))
     print("ROC-AUC:", round(roc_auc_score(y_test, lr_proba), 4))
+
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv_scores = []
+    for train_idx, valid_idx in cv.split(X, y):
+        X_train_cv, X_valid_cv = X.iloc[train_idx], X.iloc[valid_idx]
+        y_train_cv, y_valid_cv = y.iloc[train_idx], y.iloc[valid_idx]
+        cv_model = make_pipeline(StandardScaler(), LogisticRegression(random_state=42, max_iter=1000))
+        cv_model.fit(X_train_cv, y_train_cv)
+        cv_scores.append(roc_auc_score(y_valid_cv, cv_model.predict_proba(X_valid_cv)[:, 1]))
+    print("CV ROC-AUC (5-fold):", round(sum(cv_scores) / len(cv_scores), 4))
 
     xgb_model = XGBClassifier(
         n_estimators=100, max_depth=4, learning_rate=0.1,
@@ -218,15 +227,18 @@ def build_action_column(rfm_ltv: pd.DataFrame) -> pd.DataFrame:
         high_risk = row["churn_probability"] > 0.5
         high_ltv = row["predicted_ltv"] > ltv_median
         if high_risk and high_ltv:
-            return "🔴 Retain Immediately"
+            return {"code": "retain", "label": "🔴 Retain Immediately"}
         elif high_risk and not high_ltv:
-            return "⚪ Let Go"
+            return {"code": "let_go", "label": "⚪ Let Go"}
         elif not high_risk and high_ltv:
-            return "🟢 Nurture"
+            return {"code": "nurture", "label": "🟢 Nurture"}
         else:
-            return "🔵 Monitor"
+            return {"code": "monitor", "label": "🔵 Monitor"}
 
-    rfm_ltv["action"] = rfm_ltv.apply(recommend, axis=1)
+    action_details = rfm_ltv.apply(recommend, axis=1)
+    rfm_ltv["action_code"] = action_details.apply(lambda action: action["code"])
+    rfm_ltv["action_label"] = action_details.apply(lambda action: action["label"])
+    rfm_ltv["action"] = rfm_ltv["action_label"]
     return rfm_ltv
 
 

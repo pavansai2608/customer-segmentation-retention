@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,9 @@ GGF_PATH = BASE_DIR.parent / "models" / "ggf_model.pkl"
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000"
 ).split(",")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("customer_segmentation")
 
 app = FastAPI(title="Customer Segmentation API")
 
@@ -46,19 +50,25 @@ except FileNotFoundError as e:
     raise RuntimeError(f"Required BG/NBD or Gamma-Gamma model missing: {e}") from e
 
 LTV_MEDIAN = df["predicted_ltv"].median()
+ACTION_CODE_MAP = {
+    "🔴 Retain Immediately": "retain",
+    "⚪ Let Go": "let_go",
+    "🟢 Nurture": "nurture",
+    "🔵 Monitor": "monitor",
+}
 
-def recommend_action(churn_probability: float, predicted_ltv: float) -> str:
+def recommend_action(churn_probability: float, predicted_ltv: float) -> dict:
     high_risk = churn_probability > 0.5
     high_ltv = predicted_ltv > LTV_MEDIAN
 
     if high_risk and high_ltv:
-        return "🔴 Retain Immediately"
+        return {"code": "retain", "label": "🔴 Retain Immediately"}
     elif high_risk and not high_ltv:
-        return "⚪ Let Go"
+        return {"code": "let_go", "label": "⚪ Let Go"}
     elif not high_risk and high_ltv:
-        return "🟢 Nurture"
+        return {"code": "nurture", "label": "🟢 Nurture"}
     else:
-        return "🔵 Monitor"
+        return {"code": "monitor", "label": "🔵 Monitor"}
 
 
 class CustomerInput(BaseModel):
@@ -97,17 +107,22 @@ def get_actions():
 def get_retain_customers():
     retain = df[df["action"].str.contains("Retain", na=False)]
     retain = retain.sort_values("predicted_ltv", ascending=False).head(20)
-    return retain[["Customer ID", "Frequency", "Monetary",
-                    "predicted_ltv", "churn_probability",
-                    "Segment", "action"]].to_dict(orient="records")
+
+    result = retain[["Customer ID", "Frequency", "Monetary",
+                     "predicted_ltv", "churn_probability",
+                     "Segment", "action"]].copy()
+    result["action_code"] = result["action"].map(ACTION_CODE_MAP)
+    return result.to_dict(orient="records")
 
 
 # 5. Search a specific customer (looks up existing customer, re-runs live inference)
 @app.get("/customer/{customer_id}")
-def get_customer(customer_id: float):
-    row = df[df["Customer ID"] == customer_id]
+def get_customer(customer_id: int):
+    row = df[df["Customer ID"] == float(customer_id)]
     if row.empty:
+        logger.warning("Customer lookup failed for customer_id=%s", customer_id)
         return {"error": "Customer not found"}
+
     #Features the XGBoost model was actually trained on (see notebook cell 40)
     FEATURE_COLUMNS = ["Frequency", "Monetary", "predicted_ltv"]
     features = row[FEATURE_COLUMNS]
@@ -115,24 +130,34 @@ def get_customer(customer_id: float):
 
     result = row.iloc[0].to_dict()
     result["churn_probability"] = live_churn_prob
+    result["action_code"] = ACTION_CODE_MAP.get(result.get("action"), None)
+    logger.info("Customer lookup succeeded for customer_id=%s", customer_id)
     return result
 
 
 # 6. Predict churn for a brand-new customer using simple, human-friendly inputs
 @app.post("/predict")
 def predict_customer(input: CustomerInput):
-    first = datetime.strptime(input.first_purchase_date, "%Y-%m-%d")
-    last = datetime.strptime(input.last_purchase_date, "%Y-%m-%d")
+    try:
+        first = datetime.strptime(input.first_purchase_date, "%Y-%m-%d")
+        last = datetime.strptime(input.last_purchase_date, "%Y-%m-%d")
+    except ValueError:
+        logger.warning("Prediction rejected due to invalid date format: %s", input)
+        return {"error": "Dates must be in YYYY-MM-DD format"}
     today = datetime.now()
 
     # ── NEW: validate date logic before doing any math ──
     if last < first:
+        logger.warning("Prediction rejected due to invalid date order: %s", input)
         return {"error": "last_purchase_date cannot be before first_purchase_date"}
     if last > today:
+        logger.warning("Prediction rejected due to future date: %s", input)
         return {"error": "last_purchase_date cannot be in the future"}
     if input.total_orders <= 0:
+        logger.warning("Prediction rejected due to invalid order count: %s", input)
         return {"error": "total_orders must be greater than 0"}
     if input.total_spent < 0:
+        logger.warning("Prediction rejected due to negative spend: %s", input)
         return {"error": "total_spent cannot be negative"}
     # ── end new validation ──
 
@@ -163,11 +188,21 @@ def predict_customer(input: CustomerInput):
     }])
 
     churn_prob = float(model.predict_proba(features)[0][1])
+    action = recommend_action(churn_prob, predicted_ltv)
+
+    logger.info(
+        "Prediction succeeded for total_orders=%s total_spent=%s -> action=%s",
+        input.total_orders,
+        input.total_spent,
+        action["code"],
+    )
 
     return {
         "frequency": frequency_rfm,
         "monetary": monetary_rfm,
         "predicted_ltv": round(predicted_ltv, 2),
         "churn_probability": churn_prob,
-        "action": recommend_action(churn_prob, predicted_ltv)
+        "action": action,
+        "action_code": action["code"],
+        "action_label": action["label"],
     }
