@@ -16,7 +16,9 @@ DATA_PATH = BASE_DIR.parent / "models" / "final_decision_matrix.csv"
 BGF_PATH = BASE_DIR.parent / "models" / "bgf_model.pkl"
 GGF_PATH = BASE_DIR.parent / "models" / "ggf_model.pkl"
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:3000").split(",")
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000"
+).split(",")
 
 app = FastAPI(title="Customer Segmentation API")
 

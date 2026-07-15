@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import axios from "axios";
 import "./App.css";
@@ -6,57 +6,105 @@ import "./App.css";
 const API = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 const SEGMENT_COLORS = {
-  "Champions": "#4C9EEB",
-  "Loyal Customers": "#2DD4A7",
-  "At Risk": "#FF6B5B",
-  "Hibernating": "#F2B84B",
-  "default": "#6B7684"
+  "Champions": "#8FD9D0",
+  "Loyal Customers": "#A8E0B8",
+  "At Risk": "#F5AFAF",
+  "Hibernating": "#F7D2A0",
+  "default": "#B7B2CC"
+};
+
+const ACTION_COLORS = {
+  "🔴 Retain Immediately": "#F5AFAF",
+  "🟢 Nurture": "#A8E0B8",
+  "⚪ Let Go": "#B7B2CC",
+  "🔵 Monitor": "#B6A6E8",
+  "default": "#8FD9D0"
 };
 
 function segmentColor(segment) {
   return SEGMENT_COLORS[segment] || SEGMENT_COLORS.default;
 }
 
+function actionColor(action) {
+  return ACTION_COLORS[action] || ACTION_COLORS.default;
+}
+
 function riskTierColor(pct) {
-  if (pct >= 66) return "#FF6B5B";
-  if (pct >= 33) return "#F2B84B";
-  return "#2DD4A7";
+  if (pct >= 66) return "#F5AFAF";
+  if (pct >= 33) return "#F7D2A0";
+  return "#A8E0B8";
 }
 
 function formatGBP(value) {
-  if (value === undefined || value === null) return "—";
+  if (value === undefined || value === null || Number.isNaN(value)) return "—";
   return "£" + Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* ---------- small building blocks ---------- */
+
+function ThemeToggle({ theme, onToggle }) {
+  const isDark = theme === "dark";
+  return (
+    <button
+      className="theme-toggle"
+      onClick={onToggle}
+      aria-label="Toggle color theme"
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      <span className={`theme-toggle-track ${isDark ? "is-dark" : "is-light"}`}>
+        <span className="theme-toggle-thumb">
+          {isDark ? (
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none">
+              <circle cx="12" cy="12" r="4.5" fill="currentColor" />
+              <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6" />
+              </g>
+            </svg>
+          )}
+        </span>
+      </span>
+    </button>
+  );
 }
 
 function SegmentBadge({ segment }) {
   const color = segmentColor(segment);
   return (
-    <span
-      className="segment-badge"
-      style={{
-        color,
-        borderColor: color,
-        backgroundColor: color + "1A"
-      }}
-    >
+    <span className="pill" style={{ color, borderColor: color + "55", backgroundColor: color + "1A" }}>
       {segment || "Unclassified"}
     </span>
   );
 }
 
 function ActionBadge({ action }) {
-  return <span className="action-badge">{action}</span>;
+  const color = actionColor(action);
+  return (
+    <span className="pill" style={{ color, borderColor: color + "55", backgroundColor: color + "1A" }}>
+      {action}
+    </span>
+  );
 }
 
-function RiskGauge({ value }) {
-  const pct = Math.max(0, Math.min(100, value));
+function RiskGauge({ value, size = 128 }) {
+  const pct = Math.max(0, Math.min(100, value || 0));
   const color = riskTierColor(pct);
   const style = {
-    background: `conic-gradient(${color} ${pct * 3.6}deg, var(--surface-2) 0deg)`
+    width: size,
+    height: size,
+    background: `conic-gradient(${color} ${pct * 3.6}deg, var(--surface-3) 0deg)`
   };
+  const inner = Math.round(size * 0.76);
   return (
     <div className="risk-gauge" style={style}>
-      <div className="risk-gauge-inner">
+      <div className="risk-gauge-inner" style={{ width: inner, height: inner }}>
         <span className="risk-gauge-value" style={{ color }}>{pct.toFixed(0)}%</span>
         <span className="risk-gauge-label">churn risk</span>
       </div>
@@ -64,9 +112,9 @@ function RiskGauge({ value }) {
   );
 }
 
-function KpiCard({ label, value, accent, sub }) {
+function KpiCard({ label, value, accent, sub, index }) {
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" style={{ animationDelay: `${index * 60}ms` }}>
       <span className="kpi-label">{label}</span>
       <span className="kpi-value" style={accent ? { color: accent } : undefined}>{value}</span>
       {sub && <span className="kpi-sub">{sub}</span>}
@@ -84,148 +132,53 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-// ── New: prediction form for a brand-new customer ──
-function PredictPanel() {
-  const [form, setForm] = useState({
+function Field({ label, children }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/* ---------- main app ---------- */
+
+function App() {
+  const [theme, setTheme] = useState(() => {
+    const saved = window.localStorage.getItem("csr-theme");
+    if (saved) return saved;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("csr-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  const [segments, setSegments] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [retainList, setRetainList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const [customerId, setCustomerId] = useState("");
+  const [customer, setCustomer] = useState(null);
+  const [lookupError, setLookupError] = useState("");
+  const [searching, setSearching] = useState(false);
+
+  const [predictForm, setPredictForm] = useState({
     first_purchase_date: "",
     last_purchase_date: "",
     total_orders: "",
     total_spent: ""
   });
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const updateField = (field) => (e) => {
-    setForm({ ...form, [field]: e.target.value });
-  };
-
-  const isValid =
-    form.first_purchase_date &&
-    form.last_purchase_date &&
-    Number(form.total_orders) > 0 &&
-    Number(form.total_spent) >= 0;
-
-  const submitPrediction = async () => {
-    if (!isValid) {
-      setError("Please fill in all fields with valid values.");
-      return;
-    }
-    setError("");
-    setResult(null);
-    setSubmitting(true);
-    try {
-      const r = await axios.post(`${API}/predict`, {
-        first_purchase_date: form.first_purchase_date,
-        last_purchase_date: form.last_purchase_date,
-        total_orders: Number(form.total_orders),
-        total_spent: Number(form.total_spent)
-      });
-      if (r.data.error) setError(r.data.error);
-      else setResult(r.data);
-    } catch {
-      setError("Something went wrong running the prediction. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <section className="panel lookup-panel">
-      <h2>Predict a new customer</h2>
-      <p className="panel-caption">
-        Enter basic purchase history to run live churn &amp; lifetime value inference
-      </p>
-
-      <div className="predict-form">
-        <label className="predict-field">
-          <span className="predict-field-label">First purchase date</span>
-          <input
-            type="date"
-            value={form.first_purchase_date}
-            onChange={updateField("first_purchase_date")}
-          />
-        </label>
-
-        <label className="predict-field">
-          <span className="predict-field-label">Last purchase date</span>
-          <input
-            type="date"
-            value={form.last_purchase_date}
-            onChange={updateField("last_purchase_date")}
-          />
-        </label>
-
-        <label className="predict-field">
-          <span className="predict-field-label">Total orders</span>
-          <input
-            type="number"
-            min="1"
-            placeholder="e.g. 8"
-            value={form.total_orders}
-            onChange={updateField("total_orders")}
-          />
-        </label>
-
-        <label className="predict-field">
-          <span className="predict-field-label">Total spent (£)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="e.g. 4200"
-            value={form.total_spent}
-            onChange={updateField("total_spent")}
-          />
-        </label>
-      </div>
-
-      <button
-        className="predict-submit"
-        onClick={submitPrediction}
-        disabled={submitting}
-      >
-        {submitting ? "Running inference…" : "Predict churn risk"}
-      </button>
-
-      {error && <p className="error-text">{error}</p>}
-
-      {result && (
-        <div className="customer-result">
-          <RiskGauge value={(result.churn_probability || 0) * 100} />
-          <div className="customer-details">
-            <div className="customer-detail-row">
-              <span className="detail-label">Frequency</span>
-              <span className="detail-value mono">{result.frequency}</span>
-            </div>
-            <div className="customer-detail-row">
-              <span className="detail-label">Monetary</span>
-              <span className="detail-value mono">{formatGBP(result.monetary)}</span>
-            </div>
-            <div className="customer-detail-row">
-              <span className="detail-label">Predicted LTV</span>
-              <span className="detail-value mono">{formatGBP(result.predicted_ltv)}</span>
-            </div>
-            <div className="customer-detail-row">
-              <span className="detail-label">Recommended action</span>
-              <ActionBadge action={result.action} />
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function App() {
-  const [segments, setSegments] = useState([]);
-  const [actions, setActions] = useState([]);
-  const [retainList, setRetainList] = useState([]);
-  const [customerId, setCustomerId] = useState("");
-  const [customer, setCustomer] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
+  const [predictResult, setPredictResult] = useState(null);
+  const [predictError, setPredictError] = useState("");
+  const [predicting, setPredicting] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -238,32 +191,52 @@ function App() {
         setActions(actRes.data);
         setRetainList(retRes.data);
       })
+      .catch(() => setLoadError("Couldn't reach the API. Is the backend running?"))
       .finally(() => setLoading(false));
   }, []);
 
   const searchCustomer = async () => {
     if (!customerId) return;
-    setError("");
+    setLookupError("");
     setCustomer(null);
     setSearching(true);
     try {
       const r = await axios.get(`${API}/customer/${customerId}`);
-      if (r.data.error) setError(r.data.error);
+      if (r.data.error) setLookupError(r.data.error);
       else setCustomer(r.data);
     } catch {
-      setError("Customer not found");
+      setLookupError("Customer not found");
     } finally {
       setSearching(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") searchCustomer();
+  const runPrediction = async () => {
+    setPredictError("");
+    setPredictResult(null);
+    setPredicting(true);
+    try {
+      const r = await axios.post(`${API}/predict`, {
+        first_purchase_date: predictForm.first_purchase_date,
+        last_purchase_date: predictForm.last_purchase_date,
+        total_orders: Number(predictForm.total_orders),
+        total_spent: Number(predictForm.total_spent)
+      });
+      if (r.data.error) setPredictError(r.data.error);
+      else setPredictResult(r.data);
+    } catch {
+      setPredictError("Prediction failed — check the inputs and try again.");
+    } finally {
+      setPredicting(false);
+    }
   };
 
-  const totalCustomers = segments.reduce((sum, s) => sum + s.count, 0);
+  const totalCustomers = useMemo(() => segments.reduce((sum, s) => sum + s.count, 0), [segments]);
   const retainCount = retainList.length;
-  const revenueAtRisk = retainList.reduce((sum, c) => sum + (c.predicted_ltv || 0), 0);
+  const revenueAtRisk = useMemo(
+    () => retainList.reduce((sum, c) => sum + (c.predicted_ltv || 0), 0),
+    [retainList]
+  );
   const avgRetainRisk =
     retainCount > 0
       ? (retainList.reduce((sum, c) => sum + (c.churn_probability || 0), 0) / retainCount) * 100
@@ -271,36 +244,49 @@ function App() {
 
   return (
     <div className="dashboard">
+      <div className="bg-glow" aria-hidden="true" />
+
       <header className="dashboard-header">
         <div>
-          <h1>Customer Segmentation &amp; Retention</h1>
-          <p className="subtitle">Live model inference over RFM, BG/NBD, Gamma-Gamma &amp; XGBoost churn scoring</p>
+          <span className="eyebrow">Customer Intelligence</span>
+          <h1>Segmentation &amp; Retention</h1>
+          <p className="subtitle">
+            Live inference over RFM, BG/NBD, Gamma-Gamma &amp; XGBoost churn scoring
+          </p>
         </div>
-        <span className="live-badge">
-          <span className="live-dot" />
-          Model serving live
-        </span>
+        <div className="header-actions">
+          <span className="live-badge">
+            <span className="live-dot" />
+            Model serving live
+          </span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
       </header>
 
       {loading ? (
         <div className="loading-state">Loading model outputs…</div>
+      ) : loadError ? (
+        <div className="panel error-panel">{loadError}</div>
       ) : (
         <>
           <section className="kpi-row">
-            <KpiCard label="Total customers" value={totalCustomers.toLocaleString()} />
+            <KpiCard index={0} label="Total customers" value={totalCustomers.toLocaleString()} />
             <KpiCard
+              index={1}
               label="Retain immediately"
               value={retainCount.toLocaleString()}
-              accent="#FF6B5B"
+              accent="#F87171"
               sub="high LTV + high churn risk"
             />
             <KpiCard
+              index={2}
               label="Revenue at risk"
               value={formatGBP(revenueAtRisk)}
-              accent="#F2B84B"
+              accent="#FBBF24"
               sub="predicted LTV, retain list"
             />
             <KpiCard
+              index={3}
               label="Avg. risk in retain list"
               value={`${avgRetainRisk.toFixed(1)}%`}
               accent={riskTierColor(avgRetainRisk)}
@@ -316,8 +302,8 @@ function App() {
                   <CartesianGrid stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="segment" stroke="var(--text-muted)" tick={{ fontSize: 12 }} />
                   <YAxis stroke="var(--text-muted)" tick={{ fontSize: 12 }} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-2)" }} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-3)" }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                     {segments.map((s, i) => (
                       <Cell key={i} fill={segmentColor(s.segment)} />
                     ))}
@@ -334,49 +320,54 @@ function App() {
                   <CartesianGrid stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="action" stroke="var(--text-muted)" tick={{ fontSize: 12 }} />
                   <YAxis stroke="var(--text-muted)" tick={{ fontSize: 12 }} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-2)" }} />
-                  <Bar dataKey="count" fill="#4C9EEB" radius={[4, 4, 0, 0]} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-3)" }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {actions.map((a, i) => (
+                      <Cell key={i} fill={actionColor(a.action)} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </section>
 
-          <section className="panel lookup-panel">
+          <section className="panel">
             <h2>Customer lookup</h2>
             <p className="panel-caption">Enter a customer ID to run live inference against the trained models</p>
-            <div className="lookup-controls">
+            <div className="inline-controls">
               <input
+                className="text-input"
                 type="number"
                 placeholder="Customer ID"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => e.key === "Enter" && searchCustomer()}
               />
-              <button onClick={searchCustomer} disabled={searching}>
+              <button className="btn-primary" onClick={searchCustomer} disabled={searching}>
                 {searching ? "Searching…" : "Search"}
               </button>
             </div>
 
-            {error && <p className="error-text">{error}</p>}
+            {lookupError && <p className="error-text">{lookupError}</p>}
 
             {customer && (
-              <div className="customer-result">
+              <div className="result-card">
                 <RiskGauge value={(customer.churn_probability || 0) * 100} />
-                <div className="customer-details">
-                  <div className="customer-detail-row">
-                    <span className="detail-label">Customer ID</span>
-                    <span className="detail-value mono">{customer["Customer ID"]}</span>
+                <div className="result-details">
+                  <div className="result-row">
+                    <span className="result-label">Customer ID</span>
+                    <span className="result-value mono">{customer["Customer ID"]}</span>
                   </div>
-                  <div className="customer-detail-row">
-                    <span className="detail-label">Segment</span>
+                  <div className="result-row">
+                    <span className="result-label">Segment</span>
                     <SegmentBadge segment={customer.Segment} />
                   </div>
-                  <div className="customer-detail-row">
-                    <span className="detail-label">Predicted LTV</span>
-                    <span className="detail-value mono">{formatGBP(customer.predicted_ltv)}</span>
+                  <div className="result-row">
+                    <span className="result-label">Predicted LTV</span>
+                    <span className="result-value mono">{formatGBP(customer.predicted_ltv)}</span>
                   </div>
-                  <div className="customer-detail-row">
-                    <span className="detail-label">Recommended action</span>
+                  <div className="result-row">
+                    <span className="result-label">Recommended action</span>
                     <ActionBadge action={customer.action} />
                   </div>
                 </div>
@@ -384,8 +375,81 @@ function App() {
             )}
           </section>
 
-          {/* ── New section ── */}
-          <PredictPanel />
+          <section className="panel">
+            <h2>Predict a new customer</h2>
+            <p className="panel-caption">Enter basic purchase history to run live churn &amp; lifetime value inference</p>
+
+            <div className="predict-grid">
+              <Field label="First purchase date">
+                <input
+                  className="text-input"
+                  type="date"
+                  max={todayISO()}
+                  value={predictForm.first_purchase_date}
+                  onChange={(e) => setPredictForm((f) => ({ ...f, first_purchase_date: e.target.value }))}
+                />
+              </Field>
+              <Field label="Last purchase date">
+                <input
+                  className="text-input"
+                  type="date"
+                  max={todayISO()}
+                  value={predictForm.last_purchase_date}
+                  onChange={(e) => setPredictForm((f) => ({ ...f, last_purchase_date: e.target.value }))}
+                />
+              </Field>
+              <Field label="Total orders">
+                <input
+                  className="text-input"
+                  type="number"
+                  placeholder="e.g. 8"
+                  min="1"
+                  value={predictForm.total_orders}
+                  onChange={(e) => setPredictForm((f) => ({ ...f, total_orders: e.target.value }))}
+                />
+              </Field>
+              <Field label="Total spent (£)">
+                <input
+                  className="text-input"
+                  type="number"
+                  placeholder="e.g. 4200"
+                  min="0"
+                  value={predictForm.total_spent}
+                  onChange={(e) => setPredictForm((f) => ({ ...f, total_spent: e.target.value }))}
+                />
+              </Field>
+            </div>
+
+            <button className="btn-primary" onClick={runPrediction} disabled={predicting}>
+              {predicting ? "Running inference…" : "Predict churn risk"}
+            </button>
+
+            {predictError && <p className="error-text">{predictError}</p>}
+
+            {predictResult && (
+              <div className="result-card">
+                <RiskGauge value={(predictResult.churn_probability || 0) * 100} />
+                <div className="result-details">
+                  <div className="result-row">
+                    <span className="result-label">Frequency</span>
+                    <span className="result-value mono">{predictResult.frequency}</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">Monetary</span>
+                    <span className="result-value mono">{formatGBP(predictResult.monetary)}</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">Predicted LTV</span>
+                    <span className="result-value mono">{formatGBP(predictResult.predicted_ltv)}</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">Recommended action</span>
+                    <ActionBadge action={predictResult.action} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
 
           <section className="panel">
             <h2>Top customers to retain immediately</h2>
