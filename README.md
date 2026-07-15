@@ -54,6 +54,16 @@ cd frontend/my-app
 npm start
 ```
 
+## API Health & Reliability
+- Health check: GET /health
+- Prediction endpoint: POST /predict
+- Rate limiting: /predict is limited to 10 requests per minute per client
+- Validation errors return JSON errors for malformed dates and invalid input
+
+## Testing
+- Backend regression tests: pytest backend/test_main.py
+- Frontend smoke test: npm test -- --watch=false --runInBand
+
 ## Experiments
 View all MLflow experiment runs on DagsHub:
 [https://dagshub.com/pavansai2608/customer-segmentation-retention/experiments](https://dagshub.com/pavansai2608/customer-segmentation-retention/experiments)

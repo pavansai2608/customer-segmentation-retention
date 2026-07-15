@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import axios from "axios";
 import "./App.css";
@@ -147,9 +147,8 @@ function App() {
   const [theme, setTheme] = useState(() => {
     const saved = window.localStorage.getItem("csr-theme");
     if (saved) return saved;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark";
+    const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+    return mediaQuery && mediaQuery.matches ? "light" : "dark";
   });
 
   useEffect(() => {
@@ -169,6 +168,7 @@ function App() {
   const [customer, setCustomer] = useState(null);
   const [lookupError, setLookupError] = useState("");
   const [searching, setSearching] = useState(false);
+  const lookupAbortRef = useRef(null);
 
   const [predictForm, setPredictForm] = useState({
     first_purchase_date: "",
@@ -195,21 +195,45 @@ function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  const searchCustomer = async () => {
-    if (!customerId) return;
-    setLookupError("");
-    setCustomer(null);
-    setSearching(true);
-    try {
-      const r = await axios.get(`${API}/customer/${customerId}`);
-      if (r.data.error) setLookupError(r.data.error);
-      else setCustomer(r.data);
-    } catch {
-      setLookupError("Customer not found");
-    } finally {
-      setSearching(false);
+  useEffect(() => {
+    if (!customerId) {
+      setCustomer(null);
+      setLookupError("");
+      return;
     }
-  };
+
+    const timeoutId = window.setTimeout(() => {
+      if (lookupAbortRef.current) lookupAbortRef.current.abort();
+      const controller = new AbortController();
+      lookupAbortRef.current = controller;
+      setLookupError("");
+      setCustomer(null);
+      setSearching(true);
+      axios.get(`${API}/customer/${customerId}`, { signal: controller.signal })
+        .then((r) => {
+          if (r.data.error) setLookupError(r.data.error);
+          else setCustomer(r.data);
+        })
+        .catch((error) => {
+          if (error.name !== "CanceledError" && error.name !== "AbortError") {
+            setLookupError("Customer not found");
+          }
+        })
+        .finally(() => {
+          if (lookupAbortRef.current === controller) {
+            setSearching(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (lookupAbortRef.current) {
+        lookupAbortRef.current.abort();
+        lookupAbortRef.current = null;
+      }
+    };
+  }, [customerId]);
 
   const runPrediction = async () => {
     setPredictError("");

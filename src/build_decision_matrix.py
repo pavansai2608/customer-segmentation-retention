@@ -214,7 +214,11 @@ def train_models(rfm_ltv: pd.DataFrame):
     print(classification_report(y_test, xgb_model.predict(X_test)))
     print("ROC-AUC:", round(roc_auc_score(y_test, xgb_proba), 4))
 
-    # Full-dataset churn probability, used in the final decision matrix
+    # Full-dataset churn probability, used in the final decision matrix.
+    # These scores are not a fresh out-of-sample estimate; they are the model's
+    # in-training scores over the full dataset, which is appropriate for the
+    # business-facing decision matrix but should not be confused with the
+    # test-set ROC-AUC reported above.
     rfm_ltv["churn_probability"] = xgb_model.predict_proba(X)[:, 1]
 
     return lr_model, xgb_model, rfm_ltv
