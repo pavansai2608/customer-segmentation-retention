@@ -58,24 +58,29 @@ def load_artifacts():
     except Exception as exc:
         errors.append(f"decision_matrix: {exc}")
 
-    try:
-        with open(BGF_PATH, "rb") as f:
-            bgf = dill.load(f)
-    except Exception as exc:
-        errors.append(f"bgf: {exc}")
-
-    try:
-        with open(GGF_PATH, "rb") as f:
-            ggf = dill.load(f)
-    except Exception as exc:
-        errors.append(f"ggf: {exc}")
+    for artifact_name, artifact_path, target in [
+        ("bgf", BGF_PATH, "bgf"),
+        ("ggf", GGF_PATH, "ggf"),
+    ]:
+        try:
+            with open(artifact_path, "rb") as f:
+                loaded = dill.load(f)
+            if artifact_name == "bgf":
+                bgf = loaded
+            else:
+                ggf = loaded
+        except Exception as exc:
+            errors.append(f"{artifact_name}: {exc}")
+            logger.warning("Unable to load %s artifact from %s: %s", artifact_name, artifact_path, exc)
 
     return model, df, bgf, ggf, errors
 
 
 model, df, bgf, ggf, load_errors = load_artifacts()
-MODELS_READY = model is not None and not df.empty and bgf is not None and ggf is not None
+ESSENTIAL_READY = model is not None and not df.empty
+MODELS_READY = ESSENTIAL_READY
 LTV_MEDIAN = float(df["predicted_ltv"].median()) if "predicted_ltv" in df.columns and not df.empty else 0.0
+USING_LTV_FALLBACK = bgf is None or ggf is None
 ACTION_CODE_MAP = {
     "🔴 Retain Immediately": "retain",
     "⚪ Let Go": "let_go",
@@ -95,6 +100,20 @@ def recommend_action(churn_probability: float, predicted_ltv: float) -> dict:
         return {"code": "nurture", "label": "🟢 Nurture"}
     else:
         return {"code": "monitor", "label": "🔵 Monitor"}
+
+
+def estimate_predicted_ltv(first_purchase_date: datetime, last_purchase_date: datetime, total_orders: int, total_spent: float, today: datetime) -> float:
+    if total_orders <= 0 or total_spent < 0:
+        return 0.0
+
+    avg_order_value = total_spent / total_orders
+    frequency = max(total_orders - 1, 0)
+    recency_days = max((last_purchase_date - first_purchase_date).days, 0)
+    age_days = max((today - first_purchase_date).days, 1)
+
+    base_ltv = avg_order_value * (frequency + 1) * 1.2
+    recency_factor = max(0.0, 1 - (recency_days / age_days))
+    return round(max(base_ltv * (0.6 + recency_factor * 0.4), 0.0), 2)
 
 
 class CustomerInput(BaseModel):
@@ -117,6 +136,7 @@ def health():
     return {
         "status": "ok" if MODELS_READY else "degraded",
         "models_loaded": MODELS_READY,
+        "using_ltv_fallback": USING_LTV_FALLBACK,
         "load_errors": load_errors,
     }
 
@@ -220,17 +240,23 @@ def predict_customer(input: CustomerInput, request: Request):
     T = (today - first).days
     avg_order_value = input.total_spent / input.total_orders
 
-    if lifetimes_frequency > 0:
-        predicted_ltv = ggf.customer_lifetime_value(
-            bgf,
-            pd.Series([lifetimes_frequency]),
-            pd.Series([lifetimes_recency]),
-            pd.Series([T]),
-            pd.Series([avg_order_value]),
-            time=3, freq="D", discount_rate=0.01
-        ).iloc[0]
+    if bgf is not None and ggf is not None and lifetimes_frequency > 0:
+        try:
+            predicted_ltv = float(
+                ggf.customer_lifetime_value(
+                    bgf,
+                    pd.Series([lifetimes_frequency]),
+                    pd.Series([lifetimes_recency]),
+                    pd.Series([T]),
+                    pd.Series([avg_order_value]),
+                    time=3, freq="D", discount_rate=0.01
+                ).iloc[0]
+            )
+        except Exception as exc:
+            logger.warning("LTV calculation failed, using fallback: %s", exc)
+            predicted_ltv = estimate_predicted_ltv(first, last, input.total_orders, input.total_spent, today)
     else:
-        predicted_ltv = 0.0
+        predicted_ltv = estimate_predicted_ltv(first, last, input.total_orders, input.total_spent, today)
 
     features = pd.DataFrame([{
         "Frequency": frequency_rfm,
