@@ -1,0 +1,31 @@
+# Version control / IDE
+.git
+.gitignore
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Frontend (never needed inside the backend image)
+frontend/
+node_modules/
+
+# Data / notebooks (not needed at runtime — only models/ is)
+data/
+notebooks/
+src/
+reports/
+
+# DVC internals — large cache, not needed inside the image
+.dvc/cache/
+.dvc/tmp/
+
+# Docs
+README.md
+*.md

@@ -1,0 +1,16 @@
+# Build context: frontend/my-app/
+# Used only by docker-compose.dev.yml for hot-reload local development.
+FROM node:20-alpine
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+# Alpine + Docker on macOS/Windows needs polling for file-change detection
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+
+EXPOSE 3000
+CMD ["npm", "start"]

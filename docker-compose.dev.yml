@@ -1,0 +1,29 @@
+# Local development with hot reload:
+#   docker compose -f docker-compose.dev.yml up --build
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+    volumes:
+      - ./backend:/app/backend
+      - ./models:/app/models
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    build:
+      context: ./frontend/my-app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: "http://localhost:8000"
+    volumes:
+      - ./frontend/my-app/src:/app/src
+      - ./frontend/my-app/public:/app/public
+    depends_on:
+      - backend

@@ -235,6 +235,34 @@ function App() {
     };
   }, [customerId]);
 
+  const searchCustomer = async () => {
+    if (!customerId) return;
+
+    if (lookupAbortRef.current) {
+      lookupAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    lookupAbortRef.current = controller;
+    setLookupError("");
+    setCustomer(null);
+    setSearching(true);
+
+    try {
+      const r = await axios.get(`${API}/customer/${customerId}`, { signal: controller.signal });
+      if (r.data.error) setLookupError(r.data.error);
+      else setCustomer(r.data);
+    } catch (error) {
+      if (error.name !== "CanceledError" && error.name !== "AbortError") {
+        setLookupError("Customer not found");
+      }
+    } finally {
+      if (lookupAbortRef.current === controller) {
+        setSearching(false);
+      }
+    }
+  };
+
   const runPrediction = async () => {
     setPredictError("");
     setPredictResult(null);

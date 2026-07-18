@@ -54,6 +54,30 @@ cd frontend/my-app
 npm start
 ```
 
+## Run with Docker
+
+Requires the model artifacts to already be present locally (`dvc pull` if you haven't):
+
+```bash
+docker compose up --build
+```
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+
+The backend container has a healthcheck against `/health`; the frontend container won't start until it passes.
+
+**Local development with hot reload** (mounts source as volumes instead of baking a static build):
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+## Continuous Integration
+Every push/PR to `main` runs `.github/workflows/ci.yml`:
+- **Backend job** — pulls model artifacts from the DagsHub DVC remote (requires `DAGSHUB_USER` and `DAGSHUB_TOKEN` repo secrets), then runs `pytest`
+- **Frontend job** — runs the React test suite, then a production build
+
+Without the DagsHub secrets configured, the backend job will still run but tests depending on loaded models will fail — this is expected until the secrets are added under Settings → Secrets and variables → Actions.
+
 ## API Health & Reliability
 - Health check: GET /health
 - Prediction endpoint: POST /predict

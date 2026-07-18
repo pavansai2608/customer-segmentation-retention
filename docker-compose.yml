@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/my-app
+      dockerfile: Dockerfile
+      args:
+        # Browser-facing URL — must be reachable from your browser, not the
+        # Docker network, since CRA bakes this in at build time.
+        REACT_APP_API_URL: "http://localhost:8000"
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
