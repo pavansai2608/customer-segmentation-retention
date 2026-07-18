@@ -1,0 +1,107 @@
+ Image customer-segmentation-retention-frontend Building 
+ Image customer-segmentation-retention-backend Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.34kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 818B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 ...
+
+#4 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#4 DONE 1.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 DONE 1.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 125B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 596B done
+#6 DONE 0.0s
+
+#7 [stage-1 1/3] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#7 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#7 CACHED
+
+#8 [build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#8 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 0.0s done
+#8 DONE 0.0s
+
+#9 [build 2/6] WORKDIR /app
+#9 CACHED
+
+#10 [build 3/6] COPY package*.json ./
+#10 DONE 0.0s
+
+#11 [build 4/6] RUN npm ci
+#11 1.014 npm error code EUSAGE
+#11 1.014 npm error
+#11 1.014 npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+#11 1.014 npm error
+#11 1.014 npm error Missing: yaml@2.9.0 from lock file
+#11 1.014 npm error
+#11 1.014 npm error Clean install a project
+#11 1.014 npm error
+#11 1.014 npm error Usage:
+#11 1.014 npm error npm ci
+#11 1.014 npm error
+#11 1.014 npm error Options:
+#11 1.014 npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+#11 1.014 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+#11 1.014 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+#11 1.014 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+#11 1.014 npm error [--no-bin-links] [--no-fund] [--dry-run]
+#11 1.014 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+#11 1.014 npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+#11 1.014 npm error
+#11 1.014 npm error aliases: clean-install, ic, install-clean, isntall-clean
+#11 1.014 npm error
+#11 1.014 npm error Run "npm help ci" for more info
+#11 1.016 npm notice
+#11 1.016 npm notice New major version of npm available! 10.8.2 -> 12.0.1
+#11 1.016 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+#11 1.016 npm notice To update run: npm install -g npm@12.0.1
+#11 1.016 npm notice
+#11 1.016 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-07-18T06_47_51_162Z-debug-0.log
+#11 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+------
+ > [build 4/6] RUN npm ci:
+1.014 npm error
+1.014 npm error aliases: clean-install, ic, install-clean, isntall-clean
+1.014 npm error
+1.014 npm error Run "npm help ci" for more info
+1.016 npm notice
+1.016 npm notice New major version of npm available! 10.8.2 -> 12.0.1
+1.016 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+1.016 npm notice To update run: npm install -g npm@12.0.1
+1.016 npm notice
+1.016 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-07-18T06_47_51_162Z-debug-0.log
+------
+Dockerfile:9
+
+--------------------
+
+   7 |     
+
+   8 |     COPY package*.json ./
+
+   9 | >>> RUN npm ci
+
+  10 |     
+
+  11 |     COPY . .
+
+--------------------
+
+failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+
+
+
+View build details: docker-desktop://dashboard/build/default/default/kpqnsoqzjqpvheltfaernldeq
+
