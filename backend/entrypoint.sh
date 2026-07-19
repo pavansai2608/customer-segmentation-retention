@@ -11,6 +11,8 @@ if [ -n "$DAGSHUB_USER" ] && [ -n "$DAGSHUB_TOKEN" ]; then
         echo "Initializing minimal git repo for DVC..."
         cd ..
         git init -q
+        git config user.email "deploy@render.local"
+        git config user.name "Render Deploy"
         git add .dvc models/*.dvc .dvcignore 2>/dev/null || true
         git commit -q -m "init for dvc" --allow-empty
         cd backend
