@@ -3,6 +3,12 @@ pipeline {
 
     environment {
         DAGSHUB_CREDS = credentials('dagshub-token')
+        // Absolute path to your real, already-populated local checkout on this Mac.
+        // This is where models/ and data/ actually have real file content (pulled via
+        // `dvc pull` once, manually, outside of CI). We mount those directories straight
+        // into the container so tests don't depend on a network dvc pull succeeding
+        // during every single CI run.
+        LOCAL_REPO_WITH_DATA = "${HOME}/Desktop/customer-segmentation-retention"
     }
 
     options {
@@ -17,20 +23,16 @@ pipeline {
                     cat > run_backend_tests.sh << 'EOF'
 #!/bin/sh
 set -e
-pip install -r requirements.txt dvc dvc-http httpx
-dvc remote modify origin --local auth basic
-dvc remote modify origin --local user "$DAGSHUB_CREDS_USR"
-dvc remote modify origin --local password "$DAGSHUB_CREDS_PSW"
-dvc pull || echo "DVC pull failed/skipped — model-dependent tests may fail"
+pip install -r requirements.txt
 cd backend
 pytest -v --junitxml=test-results.xml
 EOF
                     chmod +x run_backend_tests.sh
 
                     docker run --rm -u root \
-                        -e DAGSHUB_CREDS_USR \
-                        -e DAGSHUB_CREDS_PSW \
                         -v "$WORKSPACE":/workspace \
+                        -v "$LOCAL_REPO_WITH_DATA/models":/workspace/models \
+                        -v "$LOCAL_REPO_WITH_DATA/data":/workspace/data \
                         -w /workspace \
                         python:3.12-slim ./run_backend_tests.sh
                 '''
