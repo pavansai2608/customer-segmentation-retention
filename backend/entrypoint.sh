@@ -6,6 +6,16 @@ if [ -n "$DAGSHUB_USER" ] && [ -n "$DAGSHUB_TOKEN" ]; then
     dvc remote modify origin --local auth basic
     dvc remote modify origin --local user "$DAGSHUB_USER"
     dvc remote modify origin --local password "$DAGSHUB_TOKEN"
+
+    if [ ! -d ../.git ]; then
+        echo "Initializing minimal git repo for DVC..."
+        cd ..
+        git init -q
+        git add .dvc models/*.dvc .dvcignore 2>/dev/null || true
+        git commit -q -m "init for dvc" --allow-empty
+        cd backend
+    fi
+
     echo "Pulling model artifacts from DagsHub..."
     dvc pull || echo "WARNING: dvc pull failed — models may be missing"
 else
