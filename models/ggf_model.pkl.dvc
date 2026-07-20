@@ -1,5 +1,5 @@
 outs:
-- md5: 572624e41e1b2288c2a3a087065261a0
-  size: 69039
+- md5: 39f6e4ec2a09d6aca27ee2dcb906690f
+  size: 68827
   hash: md5
   path: ggf_model.pkl
