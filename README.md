@@ -31,16 +31,27 @@ A full end-to-end pipeline that:
 - 226 customers flagged as "Retain Immediately" — high LTV + high churn risk
 - predicted_ltv (from BG/NBD) was the #1 most important churn feature (SHAP)
 
+## Live Deployment
+
+| Service | URL |
+|---|---|
+| Frontend (React, static site) | https://customer-segmentation-retention-1-x35i.onrender.com |
+| Backend (FastAPI) | https://customer-segmentation-retention-lfyh.onrender.com |
+| API docs (Swagger) | https://customer-segmentation-retention-lfyh.onrender.com/docs |
+
+Both run on Render's free tier. An [UptimeRobot](https://uptimerobot.com) monitor pings the backend's `/health` endpoint every 5 minutes to prevent free-tier cold starts (spin-down after ~15 min idle).
+
 ## Project Structure
 customer-segmentation-retention/
 ├── backend/          # FastAPI app
 ├── frontend/         # React dashboard
 ├── data/             # Raw and processed data (DVC tracked)
-├── models/           # Trained model artifacts
+├── models/           # Trained model artifacts (DVC tracked, synced via DagsHub)
 ├── notebooks/        # Colab notebooks
-└── src/              # Reusable Python scripts
+├── src/              # Reusable Python scripts
+└── Jenkinsfile       # CI pipeline definition
 
-## How to Run
+## How to Run Locally
 
 **Backend:**
 ```bash
@@ -53,6 +64,8 @@ uvicorn main:app --reload
 cd frontend/my-app
 npm start
 ```
+
+Note: the frontend reads its backend URL from `REACT_APP_API_URL` at **build time** (Create React App bakes env vars into the static bundle — changing it after building has no effect). For local dev this defaults to `http://127.0.0.1:8000` via `.env`.
 
 ## Run with Docker
 
@@ -71,18 +84,59 @@ The backend container has a healthcheck against `/health`; the frontend containe
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-## Continuous Integration
-Every push/PR to `main` runs `.github/workflows/ci.yml`:
-- **Backend job** — pulls model artifacts from the DagsHub DVC remote (requires `DAGSHUB_USER` and `DAGSHUB_TOKEN` repo secrets), then runs `pytest`
-- **Frontend job** — runs the React test suite, then a production build
+## Model Artifacts & DVC
 
-Without the DagsHub secrets configured, the backend job will still run but tests depending on loaded models will fail — this is expected until the secrets are added under Settings → Secrets and variables → Actions.
+Trained model files (`.pkl`) aren't committed to git — they're tracked via DVC with DagsHub as the remote storage backend. After cloning:
+```bash
+dvc pull
+```
+requires `DAGSHUB_USER` / `DAGSHUB_TOKEN` configured in `.dvc/config.local` (gitignored, never commit this). On Render, these are set as environment variables and `entrypoint.sh` configures the DVC remote credentials at container startup before pulling.
 
-## API Health & Reliability
-- Health check: GET /health
-- Prediction endpoint: POST /predict
-- Rate limiting: /predict is limited to 10 requests per minute per client
+**Important:** after retraining any model, both steps are required, not just one:
+```bash
+dvc add models/<file>.pkl   # updates the local .dvc pointer + cache
+dvc push                    # uploads the actual blob to the DagsHub remote
+git add models/<file>.pkl.dvc
+git commit -m "..."
+git push
+```
+Skipping `dvc push` leaves the git-committed pointer referencing a hash that doesn't exist on the remote — `dvc pull` will then fail with a `missing-files` error on deploy, even though everything looks fine locally.
+
+## Continuous Integration (Jenkins)
+
+CI runs on a locally-hosted Jenkins instance (not GitHub Actions), triggered automatically on every push to `main` via a GitHub webhook:
+
+```
+git push → GitHub webhook → ngrok tunnel → local Jenkins → pipeline runs
+```
+
+- **Backend stage** — runs inside a `python:3.12-slim` container with `models/` and `data/` mounted from a local pre-populated checkout (avoids depending on a network `dvc pull` succeeding on every CI run), then runs `pytest`
+- **Frontend stage** — runs inside `node:20-alpine`: `npm ci`, test suite, production build
+
+**Local setup requirements** (see `Jenkinsfile`):
+- Jenkins running locally with the GitHub plugin installed, "GitHub hook trigger for GITScm polling" enabled on the job
+- A persistent ngrok tunnel exposing Jenkins publicly, using a fixed dev domain so the GitHub webhook URL never needs updating:
+  ```bash
+  nohup ngrok http --url=https://porthole-unvocal-upstate.ngrok-free.dev 8080 > ngrok.log 2>&1 &
+  ```
+  (`nohup ... &` detaches it so it survives closing the terminal — it only stops on a full machine restart)
+- GitHub webhook payload URL: `https://<ngrok-domain>/github-webhook/`, content type `application/json`
+- `LOCAL_REPO_WITH_DATA` in the `Jenkinsfile` environment block must point at a local checkout with real model/data files already pulled via `dvc pull`
+
+## API Endpoints
+- `GET /health` — service + model load status
+- `GET /segments` — customer segment breakdown
+- `GET /actions` — retention priority matrix
+- `GET /retain` — high-value, high-risk retain list
+- `GET /customer/{customer_id}` — lookup by ID
+- `POST /predict` — live churn/LTV inference for a new customer
+- Rate limiting: `/predict` is limited to 10 requests per minute per client
 - Validation errors return JSON errors for malformed dates and invalid input
+
+## Deployment Notes / Known Quirks
+- Both Render services are on the free tier — first request after ~15 min idle takes up to 50s (mitigated by the UptimeRobot monitor above)
+- CORS: the backend's `ALLOWED_ORIGINS` env var must include the frontend's live URL, or browser requests from it will be blocked
+- Renaming a Render service changes its display name but **not** its live `.onrender.com` subdomain — that's fixed at creation time
 
 ## Testing
 - Backend regression tests: pytest backend/test_main.py
