@@ -140,6 +140,9 @@ def health():
         "load_errors": load_errors,
     }
 
+@app.head("/health")
+def health_head():
+    return {}
 
 # 2. Get all segments summary
 @app.get("/segments")
