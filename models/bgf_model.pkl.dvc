@@ -1,5 +1,0 @@
-outs:
-- md5: e5c9f81ef9dc80a36c407056b696cb88
-  size: 176567
-  hash: md5
-  path: bgf_model.pkl

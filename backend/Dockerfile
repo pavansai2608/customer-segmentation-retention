@@ -16,8 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt dvc
 # main.py resolves paths as BASE_DIR.parent / "models", so backend/ and
 # models/ must sit side by side inside the image, same as on disk.
 COPY backend/ ./backend/
+# Serving artifacts ship with the image (~1 MB) so startup needs no network.
+COPY models/ ./models/
 COPY .dvc/ ./.dvc/
-COPY models/*.dvc ./models/
 COPY .dvcignore ./
 
 WORKDIR /app/backend

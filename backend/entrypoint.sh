@@ -1,7 +1,11 @@
 #!/bin/sh
 set -e
 
-if [ -n "$DAGSHUB_USER" ] && [ -n "$DAGSHUB_TOKEN" ]; then
+# The serving artifacts are baked into the image. Only reach for DVC if one
+# is genuinely missing, and never let a failed pull stop the service starting.
+if [ -f ../models/xgb_churn_model.pkl ] && [ -f ../models/final_decision_matrix.csv ]; then
+    echo "Model artifacts present in image — skipping dvc pull."
+elif [ -n "$DAGSHUB_USER" ] && [ -n "$DAGSHUB_TOKEN" ]; then
     echo "Configuring DVC remote credentials..."
     dvc remote modify origin --local auth basic
     dvc remote modify origin --local user "$DAGSHUB_USER"
