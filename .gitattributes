@@ -1,0 +1,7 @@
+# GitHub's language detection weighs the 454 KB exploratory notebook far above the
+# FastAPI/React application, so the repo was being labelled "Jupyter Notebook".
+# The notebook is exploration; the shipped system is Python + JavaScript.
+notebooks/** linguist-documentation
+*.ipynb linguist-documentation
+data/** linguist-generated
+models/** linguist-generated
