@@ -1610,11 +1610,6 @@ Every concrete figure in the codebase, recomputed from the shipped artefacts.
 | Retain-list revenue exposure | **£16.5K** predicted LTV |
 | `/retain` endpoint cap | top **20** by `predicted_ltv` |
 
-> **⚠️ README discrepancy:** the README states **"226 customers flagged as Retain Immediately"**.
-> The shipped `final_decision_matrix.csv` contains **229**. The README figure predates the last
-> retrain (commit `a7f17bf`, *"Improve action codes and retrain pipeline"*) and was never
-> updated. **Quote 229, not 226.**
-
 ### Code size
 
 | File | Lines |
@@ -1718,18 +1713,17 @@ Ordered roughly by severity. These are the honest answers to *"what would you do
     (§9). No coverage of `/retain`, `/actions`, `/customer/{id}`, the rate limiter, or the LTV
     fallback.
 20. **The dataset filename misrepresents its contents** (§2.1) — named *II*, contains *I*.
-21. **README numbers have drifted** — "226 Retain Immediately" vs the actual 229 (§10).
-22. **Emoji are embedded in API payloads** (`"🔴 Retain Immediately"`). Presentation leaking into
+21. **Emoji are embedded in API payloads** (`"🔴 Retain Immediately"`). Presentation leaking into
     the data layer; the frontend has to strip them for display.
-23. **`action` duplicates `action_label`** in the CSV and API responses — dead weight kept for
+22. **`action` duplicates `action_label`** in the CSV and API responses — dead weight kept for
     backward compatibility.
-24. **`src/build_decision_matrix.py` needs `imbalanced-learn`, which is not in
+23. **`src/build_decision_matrix.py` needs `imbalanced-learn`, which is not in
     `requirements.txt`** — that file covers only the serving path, so a clean environment cannot
     retrain without a separate install.
-25. **No model monitoring** — nothing detects drift, and nothing triggers a retrain.
-26. **`Customer ID` is stored as a float** (`13093.0`) throughout the CSV.
-27. **Notebook outputs are committed**, inflating diffs; `nbstripout` would help.
-28. **`build_log.txt` and `ngrok.log` are committed** to the repository root as build artefacts.
+24. **No model monitoring** — nothing detects drift, and nothing triggers a retrain.
+25. **`Customer ID` is stored as a float** (`13093.0`) throughout the CSV.
+26. **Notebook outputs are committed**, inflating diffs; `nbstripout` would help.
+27. **`build_log.txt` and `ngrok.log` are committed** to the repository root as build artefacts.
 
 ---
 
@@ -1796,7 +1790,7 @@ Ordered roughly by severity. These are the honest answers to *"what would you do
 
 | Path | Purpose |
 |---|---|
-| `README.md` | Project overview, stack table, live URLs, local/Docker run instructions, DVC and Jenkins setup, API list, deployment quirks. ⚠️ "226" is stale. |
+| `README.md` | Project overview, stack table, live URLs, local/Docker run instructions, DVC and Jenkins setup, API list, deployment quirks. |
 | `CLAUDE.md` | Repo guide for AI coding agents: commands, architecture, coupling warnings, deployment constraints. |
 | `PROJECT_DEEP_DIVE.md` | This document. |
 | `build_log.txt` | Committed frontend build diagnostics (artefact; could be removed). |
