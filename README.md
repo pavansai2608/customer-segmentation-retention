@@ -28,7 +28,7 @@ A full end-to-end pipeline that:
 ## Key Results
 - 33.3% churn rate identified from 4,334 customers
 - ROC-AUC: 0.788 (Logistic Regression), 0.7798 (XGBoost)
-- 226 customers flagged as "Retain Immediately" — high LTV + high churn risk
+- 229 customers flagged as "Retain Immediately" — high LTV + high churn risk
 - predicted_ltv (from BG/NBD) was the #1 most important churn feature (SHAP)
 
 ## Live Deployment
