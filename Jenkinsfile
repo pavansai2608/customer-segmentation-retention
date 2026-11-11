@@ -8,7 +8,7 @@ pipeline {
         // `dvc pull` once, manually, outside of CI). We mount those directories straight
         // into the container so tests don't depend on a network dvc pull succeeding
         // during every single CI run.
-        LOCAL_REPO_WITH_DATA = "${HOME}/Desktop/customer-segmentation-retention"
+        LOCAL_REPO_WITH_DATA = "${HOME}/Desktop/Projects/customer-segmentation-retention"
     }
 
     options {

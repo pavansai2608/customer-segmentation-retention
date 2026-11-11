@@ -1241,7 +1241,7 @@ minute quotas, and hands-on experience with a tool still dominant in enterprise 
 ```groovy
 environment {
     DAGSHUB_CREDS = credentials('dagshub-token')
-    LOCAL_REPO_WITH_DATA = "${HOME}/Desktop/customer-segmentation-retention"
+    LOCAL_REPO_WITH_DATA = "${HOME}/Desktop/Projects/customer-segmentation-retention"
 }
 options { timestamps(); disableConcurrentBuilds() }
 ```
